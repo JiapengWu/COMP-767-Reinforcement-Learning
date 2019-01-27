@@ -21,12 +21,11 @@ def str2bool(v):
 
 def get_args():
     parser = ArgumentParser(description='Grid world')
-    parser.add_argument('--n', type=int, default=5)
+    parser.add_argument('--n', type=int, default=10)
     parser.add_argument('--k', type=int, default=10)
-    parser.add_argument('--p', type=float, default=0.9)
-    parser.add_argument('--discount', type=float, default=0.99)
-    parser.add_argument('--iteration', type=int, default=3)
-    parser.add_argument('--epsilon', type=str2bool, default="false")
+    parser.add_argument('--p', type=float, default=0.7)
+    parser.add_argument('--discount', type=float, default=0.9)
+    parser.add_argument('--iteration', type=int, default=1)
 
     args = parser.parse_args()
     return args
@@ -35,8 +34,6 @@ def get_args():
 def print_policy():
     for i in range(transition.shape[0]):
         idx = np.nonzero(transition[i])[0]
-        # print(idx)
-        # print(values[idx])
         optim = idx[np.argmax(values[idx])]
         s = ""
         if optim == i + 1: s = "right"
@@ -44,9 +41,6 @@ def print_policy():
         if optim == i + n: s = "down"
         if optim == i - n: s = "up"
         print("{} : {}".format(i, s))
-
-        # transition[i][idx] = (1-p)/(len(idx) - 1)
-        # transition[i][optim] = p
 
 
 def init():
@@ -59,9 +53,6 @@ def init():
 
     for i in range(n*n):
         try:
-            # top
-            if i == 1:
-                a = 3
             if i < n:
                 # print(i)
                 transition[i][i-1] = 1/3
@@ -91,12 +82,10 @@ def init():
 
     # top left
     transition[0] = 0
-    transition[0][1] = 1/2
-    transition[0][n] = 1/2
+    transition[0][0] = 1
     # top right
     transition[n-1] = 0
-    transition[n-1][2*n-1] = 1/2
-    transition[n-1][n-2] = 1/2
+    transition[n-1][n-1] = 1
     # bottom left
     transition[n*(n-1)] = 0
     transition[n*(n-1)][n*(n-1) + 1] = 1/2
@@ -105,8 +94,6 @@ def init():
     transition[n*n-1] = 0
     transition[n*n-1][n*n-2] = 1 / 2
     transition[n*n-1][n*(n-1)-1] = 1 / 2
-    # print(transition.tolist())
-    # print(rewards)
 
     return rewards, transition, values
 
@@ -119,19 +106,8 @@ def policy_iteration():
         old_values = values.copy()
         values = rewards + discount * np.matmul(transition, values)
 
-        # policy improvement
-        # iterate = False
-        for i in range(transition.shape[0]):
+        policy_improvement()
 
-            idx = np.nonzero(valid_transition[i])[0]
-            # print(idx)
-            # print(values[idx])
-            optim = idx[np.argmax(values[idx])]
-
-            # if transition[i][optim] != 1:
-            #     iterate = True
-            transition[i] = 0
-            transition[i][optim] = 1
         print(values[n * (n - 1)])
         print(values[-1])
         print()
@@ -146,25 +122,29 @@ def value_iteration():
     left_transition = np.zeros((n*n, n*n))
     right_transition = np.zeros((n*n, n*n))
 
-    for i in range(transition.shape[0]):
-            try:
-                if transition[i][i-n] != 0:
-                    up_transition[i][i-n] = 1
-            except:pass
-            try:
-                if transition[i][i+n] != 0:
-                    down_transition[i][i - n] = 1
-            except:pass
-            try:
-                if transition[i][i-1] != 0:
-                    left_transition[i][i - 1] = 1
-            except:pass
-            try:
-                if transition[i][i+1] != 0:
-                    right_transition[i][i + 1] = 1
-            except:pass
-
     transitions = [up_transition, down_transition, left_transition, right_transition]
+
+    for i in range(valid_transition.shape[0]):
+        idx = np.nonzero(valid_transition[i])[0]
+        for transition in transitions:
+            transition[i][idx] = (1 - p) / (len(idx) - 1)
+        try:
+            if valid_transition[i][i-n] != 0:
+                up_transition[i][i-n] = p
+        except:pass
+        try:
+            if valid_transition[i][i+n] != 0:
+                down_transition[i][i - n] = p
+        except:pass
+        try:
+            if valid_transition[i][i-1] != 0:
+                left_transition[i][i - 1] = p
+        except:pass
+        try:
+            if valid_transition[i][i+1] != 0:
+                right_transition[i][i + 1] = p
+        except:pass
+
     while True:
         global values
         old_values = values.copy()
@@ -185,17 +165,7 @@ def modified_policy_iteration():
 
         # policy improvement
         # iterate = False
-        for i in range(transition.shape[0]):
-
-            idx = np.nonzero(valid_transition[i])[0]
-            # print(idx)
-            # print(values[idx])
-            optim = idx[np.argmax(values[idx])]
-
-            # if transition[i][optim] != 1:
-            #     iterate = True
-            transition[i] = 0
-            transition[i][optim] = 1
+        policy_improvement()
         print(values[n * (n - 1)])
         print(values[-1])
         print()
@@ -203,22 +173,21 @@ def modified_policy_iteration():
         if (improvement < 1): break
 
 
-def epsilon_greedy_transform():
+def policy_improvement():
     for i in range(transition.shape[0]):
-        idx = np.nonzero(valid_transition[i])[0]
-        # print(idx)
-        # print(values[idx])
-        optim = idx[np.argmax(values[idx])]
-        transition[i] = 0
-        transition[i][idx] = (1-p)/(len(idx)-1)
-        transition[i][optim] = p
-    print(transition)
+        if not (i == 0 or i == n-1):
+            idx = np.nonzero(valid_transition[i])[0]
+            optim = idx[np.argmax(values[idx])]
+            transition[i] = 0
+            transition[i][idx] = (1 - p) / (len(idx) - 1)
+            transition[i][optim] = p
 
 
 def action():
     cur = n * (n - 1)
     print("Start: {}".format(cur))
     for i in range(n*n):
+        if cur == 0 or cur == n-1: break
         prev = cur
         idx = np.nonzero(transition[cur])[0]
         cur = np.random.choice(idx, p=transition[cur][idx])
@@ -231,8 +200,6 @@ def action():
 
 
 def test():
-    if config.epsilon:
-        epsilon_greedy_transform()
     action()
 
 
@@ -250,4 +217,5 @@ if __name__ == '__main__':
         value_iteration()
     elif config.iteration == 3:
         modified_policy_iteration()
+    print(values)
     test()
