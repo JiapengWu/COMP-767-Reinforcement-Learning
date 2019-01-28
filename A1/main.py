@@ -1,14 +1,7 @@
 from argparse import ArgumentParser
 import numpy as np
 import argparse
-
-
-class GridWorld():
-    def __init__(self, config):
-        self.config = config
-        self.n_rows = config.n
-        self.pos = 0
-
+import matplotlib.pyplot as plt
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -21,11 +14,14 @@ def str2bool(v):
 
 def get_args():
     parser = ArgumentParser(description='Grid world')
-    parser.add_argument('--n', type=int, default=10)
+
+    parser.add_argument('--epsilon', type=float, default=1e-6)
+    # print(1e-6)
+    parser.add_argument('--n', type=int, default=5)
     parser.add_argument('--k', type=int, default=10)
-    parser.add_argument('--p', type=float, default=0.7)
+    parser.add_argument('--p', type=float, default=0.9)
     parser.add_argument('--discount', type=float, default=0.9)
-    parser.add_argument('--iteration', type=int, default=1)
+    parser.add_argument('--iteration', type=int, default=2)
 
     args = parser.parse_args()
     return args
@@ -103,56 +99,64 @@ def policy_iteration():
     while True:
         # values = np.matmul(np.linalg.inv((np.eye(n*n) - discount * transition)), rewards)
         global values
-        old_values = values.copy()
+        # old_values = values.copy()
+        old_policy = transition.copy()
         values = rewards + discount * np.matmul(transition, values)
+
+        results_bottom_left.append(values[n * (n - 1)])
+        results_bottom_right.append(values[-1])
 
         policy_improvement()
 
-        print(values[n * (n - 1)])
-        print(values[-1])
-        print()
-        improvement = np.linalg.norm(values - old_values, np.inf)
-        if (improvement < 1): break
+        # improvement = np.linalg.norm(values - old_values, np.inf)
+        if np.array_equal(old_policy, transition): break
+        # if improvement < config.epsilon: break
         # print(transition)
 
 
 def value_iteration():
-    up_transition = np.zeros((n*n, n*n))
-    down_transition = np.zeros((n*n, n*n))
-    left_transition = np.zeros((n*n, n*n))
-    right_transition = np.zeros((n*n, n*n))
+    up_transition = valid_transition.copy()
+    down_transition = valid_transition.copy()
+    left_transition = valid_transition.copy()
+    right_transition = valid_transition.copy()
 
     transitions = [up_transition, down_transition, left_transition, right_transition]
 
     for i in range(valid_transition.shape[0]):
-        idx = np.nonzero(valid_transition[i])[0]
-        for transition in transitions:
-            transition[i][idx] = (1 - p) / (len(idx) - 1)
-        try:
-            if valid_transition[i][i-n] != 0:
-                up_transition[i][i-n] = p
-        except:pass
-        try:
-            if valid_transition[i][i+n] != 0:
-                down_transition[i][i - n] = p
-        except:pass
-        try:
-            if valid_transition[i][i-1] != 0:
-                left_transition[i][i - 1] = p
-        except:pass
-        try:
-            if valid_transition[i][i+1] != 0:
-                right_transition[i][i + 1] = p
-        except:pass
+        if not (i == 0 or i == n - 1):
+            idx = np.nonzero(valid_transition[i])[0]
+            for t in transitions:
+                t[i][idx] = (1 - p) / (len(idx) - 1)
+            try:
+                if valid_transition[i][i-n] != 0:
+                    up_transition[i][i-n] = p
+            except:pass
+            try:
+                if valid_transition[i][i+n] != 0:
+                    down_transition[i][i - n] = p
+            except:pass
+            try:
+                if valid_transition[i][i-1] != 0:
+                    left_transition[i][i - 1] = p
+            except:pass
+            try:
+                if valid_transition[i][i+1] != 0:
+                    right_transition[i][i + 1] = p
+            except:pass
 
     while True:
         global values
         old_values = values.copy()
+
+        results_bottom_left.append(values[n * (n - 1)])
+        results_bottom_right.append(values[-1])
+
         values = np.max(np.stack(list(map(lambda x: rewards + discount * np.matmul(x, values), transitions))), axis=0)
-        print(values[n*(n-1)])
-        print(values[-1])
+
         improvement = np.linalg.norm(values - old_values, np.inf)
-        if improvement < 1: break
+        if improvement < config.epsilon: break
+
+    policy_improvement()
 
 
 def modified_policy_iteration():
@@ -163,14 +167,12 @@ def modified_policy_iteration():
         for j in range(config.k):
             values = rewards + discount * np.matmul(transition, values)
 
-        # policy improvement
-        # iterate = False
+        results_bottom_left.append(values[n * (n - 1)])
+        results_bottom_right.append(values[-1])
+
         policy_improvement()
-        print(values[n * (n - 1)])
-        print(values[-1])
-        print()
         improvement = np.linalg.norm(values - old_values, np.inf)
-        if (improvement < 1): break
+        if improvement < config.epsilon: break
 
 
 def policy_improvement():
@@ -199,23 +201,48 @@ def action():
         print("{:5s} -> {}".format(s, cur))
 
 
-def test():
-    action()
-
-
 if __name__ == '__main__':
-    config = get_args()
-    n = config.n
-    p = config.p
-    discount = config.discount
-    rewards, transition, values = init()
-    valid_transition = transition.copy()
 
-    if config.iteration == 1:
-        policy_iteration()
-    elif config.iteration == 2:
-        value_iteration()
-    elif config.iteration == 3:
-        modified_policy_iteration()
-    print(values)
-    test()
+    for iteration in range(1, 4):
+        fig, ax = plt.subplots(nrows=2, ncols=2)
+        fig.set_figheight(10)
+        fig.set_figwidth(15)
+        for n, row in zip([5, 50], range(2)):
+            for p, col in zip([0.7, 0.9], range(2)):
+
+                results_bottom_left = []
+                results_bottom_right = []
+                config = get_args()
+                discount = 0.9
+                rewards, transition, values = init()
+                valid_transition = transition.copy()
+
+                fname = ""
+                if iteration == 1:
+                    policy_iteration()
+                elif iteration == 2:
+                    value_iteration()
+                elif iteration == 3:
+                    modified_policy_iteration()
+
+                print(values)
+                subplt = ax[row][col]
+                subplt.plot(results_bottom_left, label="bottom left")
+                subplt.plot(results_bottom_right, label="bottom right")
+                subplt.set_title('n = {}, p = {}'.format(n, p))
+                subplt.set_ylabel('value')
+
+                subplt.legend()
+
+        fname = ""
+        if iteration == 1:
+            fname = "policy iteration"
+        elif iteration == 2:
+            fname = "value iteration"
+        elif iteration == 3:
+            fname = "modified policy iteration"
+        fig.tight_layout()
+        fig.suptitle(fname)
+        plt.savefig('{}.png'.format(fname))
+        plt.clf()
+
