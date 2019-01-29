@@ -64,96 +64,60 @@ def print_policy():
 
 
 def init():
+    reward = np.zeros(n * n)  # up, right, down, left
+    transition = np.zeros((n * n, n * n))
+    values = np.zeros(n * n)
+
+    reward[0] = 1
+    reward[n - 1] = 10
+    for i in range(transition.shape[0]):
+        up = i if i < n else i - n
+        down = i if i > n * (n - 1) else i + n
+        left = i if i % n == 0 else i - 1
+        right = i if i % n == n - 1 else i + 1
+        for k in [up, down, left, right]: transition[k] += 1/4
+
+
+
+
+
+
+def init():
     reward = np.zeros(n*n)  # up, right, down, left
     transition = np.zeros((n*n, n*n))
     values = np.zeros(n*n)
+    up_transition = np.zeros((n*n, n*n))
+    down_transition = np.zeros((n*n, n*n))
+    left_transition = np.zeros((n*n, n*n))
+    right_transition = np.zeros((n*n, n*n))
+
+    transitions = [up_transition, down_transition, left_transition, right_transition]
 
     reward[0] = 1
     reward[n-1] = 10
 
-    for i in range(n*n):
-        try:
-            if i < n:
-                # print(i)
-                transition[i][i-1] = 1/3
-                transition[i][i+1] = 1/3
-                transition[i][i+n] = 1/3
-            # right
-            elif i % n == n-1:
-                transition[i][i-n] = 1/3
-                transition[i][i+n] = 1/3
-                transition[i][i-1] = 1/3
-            # bottom
-            elif i >= n*(n-1):
-                transition[i][i-n] = 1/3
-                transition[i][i+1] = 1/3
-                transition[i][i-1] = 1/3
-            # left
-            elif i % n == 0:
-                transition[i][i-n] = 1/3
-                transition[i][i+n] = 1/3
-                transition[i][i+1] = 1/3
-            else:
-                transition[i][i + 1] = 1 / 4
-                transition[i][i - 1] = 1 / 4
-                transition[i][i + n] = 1 / 4
-                transition[i][i - n] = 1 / 4
-        except: pass
-
-    # top left
-    transition[0] = 0
-    transition[0][0] = 1
-    # top right
-    transition[n-1] = 0
-    transition[n-1][n-1] = 1
-    # bottom left
-    transition[n*(n-1)] = 0
-    transition[n*(n-1)][n*(n-1) + 1] = 1/2
-    transition[n*(n-1)][n*(n-2)] = 1/2
-    # bottom right
-    transition[n*n-1] = 0
-    transition[n*n-1][n*n-2] = 1 / 2
-    transition[n*n-1][n*(n-1)-1] = 1 / 2
-
-    up_transition = transition.copy()
-    down_transition = transition.copy()
-    left_transition = transition.copy()
-    right_transition = transition.copy()
-
-    transitions = [up_transition, down_transition, left_transition, right_transition]
-    print(transition)
     for i in range(transition.shape[0]):
         if not (i == 0 or i == n - 1):
-            idx = np.nonzero(transition[i])[0]
-            print(idx)
-            for t in transitions:
-                t[i][idx] = (1 - p) / (len(idx) - 1)
-            try:
-                if transition[i][i - n] != 0:
-                    up_transition[i][i - n] = p
-                else:
-                    up_transition[i][idx] = 0
-                    up_transition[i][i - n]
-            except:
-                pass
-            try:
-                if transition[i][i + n] != 0:
-                    down_transition[i][i - n] = p
-            except:
-                pass
-            try:
-                if transition[i][i - 1] != 0:
-                    left_transition[i][i - 1] = p
-            except:
-                pass
-            try:
-                if transition[i][i + 1] != 0:
-                    right_transition[i][i + 1] = p
-            except:
-                pass
+            up = i if i < n else i - n
+            down = i if i >= n * (n - 1) else i + n
+            left = i if i % n == 0 else i - 1
+            right = i if i % n == n - 1 else i + 1
+            directions = [up, down, left, right]
+            num_other_directions = len(set(directions)) - 1
+            for d in directions: transition[i][d] += 1/4
+            for t in transitions: t[i][np.array(directions)] = (1-p)/num_other_directions
+            up_transition[i][up] = down_transition[i][down] = right_transition[i][right] = left_transition[i][left] = p
 
-    print(up_transition)
-    exit()
+    for t in [up_transition, down_transition, left_transition, right_transition, transition]:
+        t[0][0] = 1 # top left
+        t[n-1][n-1] = 1 # top right
+
+    # print(transition)
+    #
+    # print(up_transition)
+    # print(down_transition)
+    # print(left_transition)
+    # print(right_transition)
 
     up_reward = np.matmul(up_transition, reward)
     down_reward = np.matmul(down_transition, reward)
