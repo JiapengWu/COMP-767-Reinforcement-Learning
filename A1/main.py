@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+import time
 
 def plot():
     for state, fname in zip([bottom_left, bottom_right], ['bottom left', 'bottom right']):
@@ -27,6 +28,7 @@ def plot():
         fig.suptitle(fname)
         plt.savefig('{}.png'.format(fname))
         plt.clf()
+
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -64,25 +66,6 @@ def print_policy():
 
 
 def init():
-    reward = np.zeros(n * n)  # up, right, down, left
-    transition = np.zeros((n * n, n * n))
-    values = np.zeros(n * n)
-
-    reward[0] = 1
-    reward[n - 1] = 10
-    for i in range(transition.shape[0]):
-        up = i if i < n else i - n
-        down = i if i > n * (n - 1) else i + n
-        left = i if i % n == 0 else i - 1
-        right = i if i % n == n - 1 else i + 1
-        for k in [up, down, left, right]: transition[k] += 1/4
-
-
-
-
-
-
-def init():
     reward = np.zeros(n*n)  # up, right, down, left
     transition = np.zeros((n*n, n*n))
     values = np.zeros(n*n)
@@ -112,90 +95,69 @@ def init():
         t[0][0] = 1 # top left
         t[n-1][n-1] = 1 # top right
 
-    # print(transition)
-    #
-    # print(up_transition)
-    # print(down_transition)
-    # print(left_transition)
-    # print(right_transition)
-
-    up_reward = np.matmul(up_transition, reward)
-    down_reward = np.matmul(down_transition, reward)
-    left_reward = np.matmul(left_transition, reward)
-    right_reward = np.matmul(right_transition, reward)
-    rewards = [up_reward, down_reward, left_reward, right_reward]
+    rewards = list(map(lambda x: np.matmul(x, reward), transitions))
 
     return reward, transition, values, transitions, rewards
-
-
-def policy_iteration():
-    # policy evaluation
-    while True:
-        # old_values = values.copy()
-        old_policy = transition.copy()
-        global values
-
-        values = np.matmul(np.linalg.inv((np.identity(n*n) - discount * transition)), reward)
-        # values = rewards + discount * np.matmul(transition, values)
-
-        results_bottom_left.append(values[n * (n - 1)])
-        results_bottom_right.append(values[-1])
-        policy_improvement()
-
-        if np.array_equal(old_policy, transition):
-            break
 
 
 def value_iteration():
     while True:
         global values
+        # print(values)
         old_values = values.copy()
 
         results_bottom_left.append(values[n * (n - 1)])
         results_bottom_right.append(values[-1])
-
         values = np.max(np.stack(list(map(lambda x: x[0] + discount * np.matmul(x[1], values),
                                           zip(rewards, transitions)))), axis=0)
 
         improvement = np.linalg.norm(values - old_values, np.inf)
         if improvement < config.epsilon:
             break
-
     policy_improvement()
+
+
+def policy_improvement():
+    optimal_action = np.argmax(np.stack(list(map(lambda x: x[0] + discount * np.matmul(x[1],
+                                                                                       values), zip(rewards, transitions)))), axis=0)
+    for i in range(transition.shape[0]):
+        if not (i == 0 or i == n-1):
+            transition[i] = transitions[optimal_action[i]][i]
+
+
+def policy_iteration():
+    # policy evaluation
+    while True:
+        global values
+        old_values = values.copy()
+
+        # print(values)
+        values = np.matmul(np.linalg.inv((np.identity(n*n) - discount * transition)), np.matmul(transition, reward))
+        results_bottom_left.append(values[n * (n - 1)])
+        results_bottom_right.append(values[-1])
+        policy_improvement()
+
+        # if np.array_equal(old_policy, transition):
+
+        improvement = np.linalg.norm(values - old_values, np.inf)
+        if improvement < config.epsilon:
+            break
 
 
 def modified_policy_iteration():
     while True:
-        # values = np.matmul(np.linalg.inv((np.eye(n*n) - discount * transition)), rewards)
         global values
         old_values = values.copy()
         for j in range(config.k):
-            values = reward + discount * np.matmul(transition, values)
-
+            values = np.matmul(transition, reward) + discount * np.matmul(transition, values)
         results_bottom_left.append(values[n * (n - 1)])
         results_bottom_right.append(values[-1])
 
         policy_improvement()
+
         improvement = np.linalg.norm(values - old_values, np.inf)
         if improvement < config.epsilon:
-            values = reward + discount * np.matmul(transition, values)
             break
-
-
-def policy_improvement():
-    optimal_action = np.argmax(np.stack(list(map(lambda x: x[0] + discount * np.matmul(x[1], values),
-                                                     zip(rewards, transitions)))), axis=0)
-    for i in range(transition.shape[0]):
-        if not (i == 0 or i == n-1):
-            idx = np.nonzero(valid_transition[i])[0]
-            optim = -1
-            if   optimal_action[i] == 0: optim = i - n
-            elif optimal_action[i] == 1: optim = i + n
-            elif optimal_action[i] == 2: optim = i - 1
-            elif optimal_action[i] == 3: optim = i + 1
-            transition[i] = 0
-            transition[i][idx] = (1 - p) / (len(idx) - 1)
-            transition[i][optim] = p
 
 
 def action():
@@ -215,11 +177,13 @@ def action():
 
 
 if __name__ == '__main__':
-
     bottom_left = {}
     bottom_right = {}
-    for n in [3, 10]:
-        for p in [0.7, 0.9]:
+    # for n in [5]:
+    #     for p in [0.9]:
+    for n in [5, 50]:
+        for p in [0.9, 0.7]:
+            print("n = {}, p = {}:".format(n, p))
             bottom_left[(n, p)] = []
             bottom_right[(n, p)] = []
             for iteration in range(3):
@@ -229,19 +193,21 @@ if __name__ == '__main__':
                 discount = 0.9
                 reward, transition, values, transitions, rewards = init()
                 valid_transition = transition.copy()
-
+                start = time.time()
                 if iteration == 0:
+                    print("value iteration")
                     value_iteration()
                 elif iteration == 1:
+                    print("policy iteration")
                     policy_iteration()
                 elif iteration == 2:
+                    print("modified policy iteration")
                     modified_policy_iteration()
+                print(1000 * (time.time() - start))
 
                 bottom_left[(n, p)].append(results_bottom_left.copy())
                 bottom_right[(n, p)].append(results_bottom_right.copy())
 
-                print(values)
-                # action()
     plot()
 
 
